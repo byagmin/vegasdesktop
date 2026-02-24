@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Las Vegas Weekend Guide</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: #eee; }
+
+        #header {
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            padding: 20px 30px;
+            text-align: center;
+            border-bottom: 3px solid #e94560;
+        }
+        #header h1 {
+            font-size: 28px;
+            color: #e94560;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        #header p {
+            color: #aaa;
+            margin-top: 5px;
+            font-size: 14px;
+        }
+
+        #container {
+            display: flex;
+            height: calc(100vh - 85px);
+        }
+
+        #sidebar {
+            width: 380px;
+            min-width: 380px;
+            overflow-y: auto;
+            background: #16213e;
+            padding: 15px;
+            border-right: 2px solid #0f3460;
+        }
+
+        .category {
+            margin-bottom: 18px;
+        }
+        .category h2 {
+            font-size: 15px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .cat-landmarks h2 { background: #533483; }
+        .cat-bars h2 { background: #0f3460; }
+        .cat-restaurants h2 { background: #b5451b; }
+        .cat-dance h2 { background: #1b6b3a; }
+
+        .venue-card {
+            background: #1a1a2e;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-left: 4px solid transparent;
+        }
+        .venue-card:hover {
+            background: #222244;
+            transform: translateX(3px);
+        }
+        .cat-landmarks .venue-card { border-left-color: #a855f7; }
+        .cat-bars .venue-card { border-left-color: #3b82f6; }
+        .cat-restaurants .venue-card { border-left-color: #f97316; }
+        .cat-dance .venue-card { border-left-color: #22c55e; }
+
+        .venue-card h3 {
+            font-size: 14px;
+            color: #fff;
+            margin-bottom: 3px;
+        }
+        .venue-card .location {
+            font-size: 11px;
+            color: #888;
+        }
+        .venue-card .desc {
+            font-size: 12px;
+            color: #aaa;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+
+        #map {
+            flex: 1;
+        }
+
+        .legend {
+            background: rgba(26, 26, 46, 0.95);
+            padding: 12px 15px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            font-size: 12px;
+            line-height: 2;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .legend-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            display: inline-block;
+            border: 2px solid #fff;
+        }
+
+        .leaflet-popup-content-wrapper {
+            background: #1a1a2e !important;
+            color: #eee !important;
+            border-radius: 10px !important;
+            border: 1px solid #444 !important;
+        }
+        .leaflet-popup-tip { background: #1a1a2e !important; }
+        .leaflet-popup-content { margin: 12px 16px !important; }
+        .popup-title { font-size: 16px; font-weight: bold; margin-bottom: 4px; }
+        .popup-location { font-size: 12px; color: #888; margin-bottom: 6px; }
+        .popup-desc { font-size: 13px; color: #ccc; line-height: 1.5; }
+        .popup-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+
+        @media (max-width: 900px) {
+            #container { flex-direction: column; height: auto; }
+            #sidebar { width: 100%; min-width: unset; max-height: 40vh; }
+            #map { height: 60vh; }
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1>Las Vegas Weekend Guide</h1>
+        <p>Bars, Restaurants, Dance Clubs & Landmarks &mdash; Feb 28-Mar 1, 2026</p>
+    </div>
+    <div id="container">
+        <div id="sidebar"></div>
+        <div id="map"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+    const venues = [
+        // === LANDMARKS ===
+        {
+            name: "MGM Grand Hotel & Casino",
+            category: "landmark",
+            lat: 36.1024, lng: -115.1695,
+            location: "3799 S Las Vegas Blvd",
+            desc: "Iconic mega-resort on the Strip with 6,852 rooms, world-class dining, entertainment, and the Grand Garden Arena."
+        },
+        {
+            name: "The Sphere",
+            category: "landmark",
+            lat: 36.1202, lng: -115.1637,
+            location: "255 Sands Ave (behind The Venetian)",
+            desc: "Revolutionary 366-ft tall spherical venue with immersive LED interior and cutting-edge audio. A must-see Vegas landmark."
+        },
+        {
+            name: "Def Leppard @ The Colosseum",
+            category: "landmark",
+            lat: 36.1170, lng: -115.1745,
+            location: "Caesars Palace, 3570 S Las Vegas Blvd",
+            desc: "FINAL SHOW: Sat Feb 28 at 8 PM! The Colosseum at Caesars Palace (4,300 seats). Also Thu Feb 26. Tickets from $110 at Ticketmaster."
+        },
+        // === BARS & LOUNGES ===
+        {
+            name: "Foundation Room",
+            category: "bar",
+            lat: 36.0907, lng: -115.1751,
+            location: "Mandalay Bay, 63rd Floor",
+            desc: "Upscale lounge atop the 63rd floor with fine dining, VIP bottle service, and stunning panoramic views. Sophisticated crowd."
+        },
+        {
+            name: "Alle Lounge on 66",
+            category: "bar",
+            lat: 36.1375, lng: -115.1665,
+            location: "Resorts World, 66th Floor",
+            desc: "Elegant rooftop bar with handcrafted cocktails, rare spirits, and spectacular views of the Strip. Refined and cozy."
+        },
+        {
+            name: "Legacy Club",
+            category: "bar",
+            lat: 36.1710, lng: -115.1428,
+            location: "Circa Resort, 60th Floor, Fremont St",
+            desc: "Contemporary rooftop bar with open-air terrace and fire pits. Great views of downtown. Perfect for the mature crowd."
+        },
+        {
+            name: "Ghostbar",
+            category: "bar",
+            lat: 36.1157, lng: -115.1840,
+            location: "Palms Casino Resort, 55th Floor",
+            desc: "Sleek ultra-lounge with indoor space and outdoor balcony featuring the famous glass-floor 'Ghostdeck.' Panoramic views."
+        },
+        {
+            name: "Chateau Nightclub & Rooftop",
+            category: "bar",
+            lat: 36.1122, lng: -115.1717,
+            location: "Paris Hotel (under the Eiffel Tower)",
+            desc: "Rooftop bar under the Eiffel Tower replica with views of the Bellagio fountains. Good mix of ages, not too loud."
+        },
+        {
+            name: "The Piano Bar",
+            category: "bar",
+            lat: 36.1147, lng: -115.1730,
+            location: "Harrah's Las Vegas",
+            desc: "Bartenders and servers are professional singers! Loud, fun, and very social. Open nightly 8 PM-late. No cover, arrive early."
+        },
+        // === RESTAURANTS ===
+        {
+            name: "Joel Robuchon",
+            category: "restaurant",
+            lat: 36.1020, lng: -115.1702,
+            location: "MGM Grand",
+            desc: "Legendary French fine dining with Forbes 4-star rating. One of the most acclaimed restaurants in Las Vegas."
+        },
+        {
+            name: "Le Cirque",
+            category: "restaurant",
+            lat: 36.1129, lng: -115.1770,
+            location: "Bellagio Hotel",
+            desc: "Exclusive 16-table French restaurant with views of the Bellagio fountains. Prix fixe menus. Ultra-refined experience."
+        },
+        {
+            name: "Gordon Ramsay Steak",
+            category: "restaurant",
+            lat: 36.1115, lng: -115.1729,
+            location: "Paris Las Vegas",
+            desc: "Celebrity chef Gordon Ramsay's contemporary steakhouse with bar area and private dining rooms."
+        },
+        {
+            name: "Carbone",
+            category: "restaurant",
+            lat: 36.1072, lng: -115.1768,
+            location: "ARIA Resort & Casino",
+            desc: "NYC's iconic Italian-American restaurant. Classic dishes, impeccable service, retro-glamorous atmosphere."
+        },
+        {
+            name: "Sinatra",
+            category: "restaurant",
+            lat: 36.1285, lng: -115.1660,
+            location: "Encore at Wynn",
+            desc: "Forbes award-winning upscale Italian with Hollywood glamour. Named for Frank Sinatra with memorabilia throughout."
+        },
+        {
+            name: "Bavette's Steakhouse & Bar",
+            category: "restaurant",
+            lat: 36.1028, lng: -115.1730,
+            location: "Park MGM",
+            desc: "Yelp's top-rated steakhouse. Intimate, jazzy atmosphere with classic steakhouse fare and craft cocktails."
+        },
+        {
+            name: "Eiffel Tower Restaurant",
+            category: "restaurant",
+            lat: 36.1125, lng: -115.1710,
+            location: "Paris Las Vegas, 11th Floor",
+            desc: "Dine 100 ft above the Strip in the Eiffel Tower replica. Classic French cuisine with breathtaking views. Very romantic."
+        },
+        {
+            name: "Mott 32",
+            category: "restaurant",
+            lat: 36.1210, lng: -115.1686,
+            location: "The Venetian",
+            desc: "Upscale Chinese from various regions. Famous Peking duck, dim romantic lighting, and exceptional service."
+        },
+        // === DANCE CLUBS ===
+        {
+            name: "XS Nightclub",
+            category: "dance",
+            lat: 36.1267, lng: -115.1625,
+            location: "Wynn Las Vegas",
+            desc: "The gold standard of luxury clubs. Indoor-outdoor design with world-class DJs. Refined 30s-40s crowd. Fri-Sun."
+        },
+        {
+            name: "Omnia Nightclub",
+            category: "dance",
+            lat: 36.1158, lng: -115.1750,
+            location: "Caesars Palace",
+            desc: "Iconic multi-level club. Rooftop terrace plays vocal house & classic remixes — perfect for the 40+ crowd. Stunning views."
+        },
+        {
+            name: "Hakkasan",
+            category: "dance",
+            lat: 36.1030, lng: -115.1688,
+            location: "MGM Grand",
+            desc: "Upscale multi-level club. Choose between high-energy dance floors or quieter lounges. Mature, stylish crowd."
+        },
+        {
+            name: "Tao Nightclub",
+            category: "dance",
+            lat: 36.1220, lng: -115.1695,
+            location: "The Venetian",
+            desc: "Asian-inspired decor, fits 2,500 people. Outdoor terrace for quieter moments. Slightly older crowd. Great food too."
+        },
+        {
+            name: "Marquee Nightclub",
+            category: "dance",
+            lat: 36.1097, lng: -115.1738,
+            location: "The Cosmopolitan",
+            desc: "Vegas staple with big-name DJs. Wide range of ages celebrating milestones. Luxurious decor, incredible sound."
+        },
+        {
+            name: "On The Record",
+            category: "dance",
+            lat: 36.1033, lng: -115.1723,
+            location: "Park MGM",
+            desc: "Hidden speakeasy entered through a record store. Plays 80s, 90s, 2000s hits. Private karaoke rooms. Wed/Fri/Sat."
+        },
+        {
+            name: "Oddfellows",
+            category: "dance",
+            lat: 36.1695, lng: -115.1413,
+            location: "Fremont Street",
+            desc: "80s dance party every Friday night! Tons of 80s and 90s classics. Great vibe for the nostalgic crowd on Fremont."
+        }
+    ];
+
+    // Color config per category
+    const catConfig = {
+        landmark: { color: '#a855f7', label: 'Landmarks & Concerts', icon: '&#9733;', tagBg: '#533483' },
+        bar:      { color: '#3b82f6', label: 'Bars & Lounges',       icon: '&#127864;', tagBg: '#0f3460' },
+        restaurant:{ color: '#f97316', label: 'Restaurants',          icon: '&#127860;', tagBg: '#b5451b' },
+        dance:    { color: '#22c55e', label: 'Dance Clubs',          icon: '&#127925;', tagBg: '#1b6b3a' }
+    };
+
+    // Init map
+    const map = L.map('map', {
+        center: [36.1200, -115.1700],
+        zoom: 14,
+        zoomControl: true
+    });
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+        maxZoom: 19
+    }).addTo(map);
+
+    // Create markers
+    const markers = {};
+    venues.forEach((v, i) => {
+        const cfg = catConfig[v.category];
+        const size = v.category === 'landmark' ? 18 : 14;
+        const icon = L.divIcon({
+            className: 'custom-marker',
+            html: `<div style="
+                width:${size*2}px; height:${size*2}px;
+                background:${cfg.color};
+                border:3px solid #fff;
+                border-radius:50%;
+                display:flex; align-items:center; justify-content:center;
+                font-size:${size}px;
+                box-shadow: 0 0 10px ${cfg.color}88, 0 2px 6px rgba(0,0,0,0.5);
+            ">${cfg.icon}</div>`,
+            iconSize: [size*2, size*2],
+            iconAnchor: [size, size],
+            popupAnchor: [0, -size]
+        });
+
+        const marker = L.marker([v.lat, v.lng], { icon })
+            .addTo(map)
+            .bindPopup(`
+                <div>
+                    <span class="popup-tag" style="background:${cfg.tagBg};color:#fff;">${cfg.label}</span>
+                    <div class="popup-title">${v.name}</div>
+                    <div class="popup-location">${v.location}</div>
+                    <div class="popup-desc">${v.desc}</div>
+                </div>
+            `, { maxWidth: 300 });
+
+        markers[i] = marker;
+    });
+
+    // Legend
+    const legend = L.control({ position: 'bottomright' });
+    legend.onAdd = () => {
+        const div = L.DomUtil.create('div', 'legend');
+        div.innerHTML = '<div style="font-weight:bold;margin-bottom:6px;color:#e94560;">MAP LEGEND</div>' +
+            Object.values(catConfig).map(c =>
+                `<div class="legend-item"><span class="legend-dot" style="background:${c.color}"></span> ${c.label}</div>`
+            ).join('');
+        return div;
+    };
+    legend.addTo(map);
+
+    // Build sidebar
+    const sidebar = document.getElementById('sidebar');
+    const catOrder = ['landmark', 'bar', 'restaurant', 'dance'];
+    const catNames = {
+        landmark: 'Landmarks & Concerts',
+        bar: 'Bars & Lounges',
+        restaurant: 'Restaurants',
+        dance: 'Dance Clubs'
+    };
+
+    catOrder.forEach(cat => {
+        const cfg = catConfig[cat];
+        const catVenues = venues.map((v,i) => ({...v, idx: i})).filter(v => v.category === cat);
+        const div = document.createElement('div');
+        div.className = `category cat-${cat === 'landmark' ? 'landmarks' : cat === 'bar' ? 'bars' : cat === 'restaurant' ? 'restaurants' : 'dance'}`;
+
+        div.innerHTML = `<h2>${cfg.icon} ${catNames[cat]} (${catVenues.length})</h2>`;
+
+        catVenues.forEach(v => {
+            const card = document.createElement('div');
+            card.className = 'venue-card';
+            card.innerHTML = `
+                <h3>${v.name}</h3>
+                <div class="location">${v.location}</div>
+                <div class="desc">${v.desc}</div>
+            `;
+            card.addEventListener('click', () => {
+                map.flyTo([v.lat, v.lng], 16, { duration: 0.8 });
+                markers[v.idx].openPopup();
+            });
+            div.appendChild(card);
+        });
+
+        sidebar.appendChild(div);
+    });
+    </script>
+</body>
+</html>
